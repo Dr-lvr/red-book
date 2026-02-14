@@ -87,7 +87,7 @@ Theory is super clear. Execution much less. Here's the condensed version of two 
 
 >Note on Permissions: This happens because CreateChild on an OU allows you to define the initial state of an object (including sensitive attributes like msDS-ManagedAccountPrecededByLink), but it does not grant WriteProperty or GenericAll over the object once it is "born." Unless the ACEs are set to inherit down to the new child object, you lose control the moment the creation is finalized.
 
-**Network issues.** LDAP and Kerberos are filtered from outside the box. Only WinRM is exposed. I knew it, I ignore it. Set up a chisel reverse tunnel to forward ports 88, 389, and 636 through WinRM. Then LDAP signing kicked in and broke plain LDAP. Then the tunnel kept dying. 1 AM debugging spiral.
+**Network issues.** LDAP and Kerberos are filtered from outside the box. Only WinRM is exposed. I knew it, I ignored it. Set up a chisel reverse tunnel to forward ports 88, 389, and 636 through WinRM. Then LDAP signing kicked in and broke plain LDAP. Then the tunnel kept dying. 1 AM debugging spiral.
 
 **What actually worked.** bloodyAD through the chisel tunnel:
 
@@ -108,7 +108,7 @@ bloodyAD created the dMSA, set the predecessor, got a TGT, and pulled the Admini
 - Server 2025 + CreateChild on any OU = check BadSuccessor (immediately)
 - gMSA ≠ dMSA. Different object classes, different cmdlets (!!!)
 - CreateChild = one shot jic. Pack everything into the initial `SetInfo()`.
-- Don't ignore notes on port accessibility while tools. Would've saved me the whole tunnel debugging session.
+- Don't ignore notes on port accessibility while looking for tools. Would've saved me the whole tunnel debugging session.
 - bloodyAD with `--prepatch` I think (but I've not enaugh cs) is currently the cleanest way to run BadSuccessor from Linux.
 - When tunneling AD traffic, expect LDAP signing issues.
 
