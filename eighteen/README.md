@@ -1,4 +1,4 @@
-# HTB Eighteen — BadSuccessor on Server 2025
+# HTB Easy - Eighteen — BadSuccessor on Server 2025
 
 > I work in industrial OT/IT integration during the day while I'm teaching myself offensive security in the evenings. This is one of those — well, three of them.
 > If you're here for a speedrun, this isn't it. If you want to see someone figure out a new attack class in real time, including all the dumb mistakes, keep reading^
