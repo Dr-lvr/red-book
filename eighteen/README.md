@@ -6,7 +6,7 @@
 
 ## The Setup
 
-Single Windows Server 2025 domain controller. One machine, one domain. It's rated easy. I spent three evenings on it after work — maybe 8/10 hours total. The user flag took me one evening. The root flag took the other two and a half.
+Single Windows Server 2025 domain controller. One machine, one domain. It's rated easy. I spent three evenings on it after work — maybe 8/10 hours total. The user flag took me minutes. The root flag took the other two and a half day.
 
 The attack path itself is almost elegant once you see it. Getting there was not.
 
