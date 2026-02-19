@@ -1,73 +1,134 @@
-# HTB WingData
+# HTB Easy - Eighteen — BadSuccessor on Server 2025
 
-> Linux | Wing FTP Server
->
-> Two evenings after work, ~8 hours. Rated easy.
-
----
-
-## Foothold
-
-Public pre-auth RCE on the FTP server. Null byte injection in Lua session files — the server stores sessions as Lua scripts and runs them with `dofile()`. C-level `strlen` stops at the null byte, the Lua interpreter doesn't. Public exploit, shell in minutes as the FTP service account.
+> I work in industrial OT/IT integration during the day while I'm teaching myself offensive security in the evenings. This is one of those — well, three of them.
+> If you're here for a speedrun, this isn't it. If you want to see someone figure out a new attack class in real time, including all the dumb mistakes, keep reading^
 
 ---
 
-## The Service Account
+## The Setup
 
-The service account runs the FTP process. It can read configs, user databases, logs. It cannot access the target user's home directory (`drwxrwx---`, wrong user, wrong group) or the privesc path in `/opt/` (`drwxr-x---`, root-owned, target user's group). No sudo, no SUID, no capabilities, no cron.
+Single Windows Server 2025 domain controller. One machine, one domain. EZ. I spent three evenings on that, after work — maybe 8/10 hours total.
+The user flag took me minutes. The root flag took the other two and a half day.
 
-Here's everything I tried before going back to the hashes.
-
-**FTP credentials.** User passwords stored as salted SHA-256 in readable XML files. Config documents the exact format. Noted for later.
-
-**Password manipulation + server restart.** Config files are writable. Changed FTP passwords, admin password, master password. Server restart required — kill the process, lose the shell, wait for systemd to restart, re-exploit. Got into the webclient and admin panel with new credentials.
-
-**Admin panel.** Chisel tunnel to the internal admin port. Full control over user configuration — virtual directories, quotas, permissions, groups. Gave the target user every write permission available. Doesn't matter: the FTP process runs as the service account at the OS level. FTP permissions say "yes", the filesystem says "no."
-
-**Lua console.** Both the admin panel and the CLI tool (`wftpconsole`) expose a Lua scripting environment. Arbitrary code execution — as the service account. Enumerated every API function the server exposes. Tried programmatic virtual directory manipulation, task scheduling, database operations. Same UID, same wall.
-
-**Internal services.** Curl against FTP locally, webclient API, SFTP on alternate ports. Every write to the target user's directories: permission denied.
-
-**System sweep.** Apache config (static site), bookmark database (empty), audit logs (timestamps only), grepped for credentials system-wide, checked SSH keys, hidden files. LinPEAS confirmed what I already knew.
-
-**The upload paradox.** The webclient lets the target FTP user "upload" files with the permissions I enabled from the admin panel. But the upload handler is the FTP process, which is the service account, which can't write to the target user's home. An FTP user with full write permissions who cannot write.
+The attack path itself is almost obvius, AD, controller... some kind of ticket, hash or something.
 
 ---
 
-## The Pivot
+## Getting In
 
-Cracked one of the five FTP hashes against rockyou. Hashcat mode 1420, `sha256(salt + password)`, hex-encoded salt. Password reused for SSH. User flag.
+Had a user list from the early stage and two candidate passwords. Password spray with NetExec against WinRM:
 
----
+```bash
+nxc winrm <target> -u users.txt -p '<password>'
+```
 
-## Root
-
-`sudo -l` reveals a Python script runnable as root. Extracts tar archives with `tarfile.extractall(filter="data")`. The `data` filter uses `os.path.realpath()` to validate symlinks, but `realpath()` silently stops resolving when the path exceeds PATH_MAX (4096 bytes). Crafted a tar that inflates the resolution path past that limit using long directory names paired with short symlinks, then chained through the unresolved symlink to write outside the extraction directory as root.
-
-Took a few attempts — naive approaches (deep short-name chains, oversized directory names) failed for different reasons. The key from the original Google Security Research advisory is the asymmetry: short tar member names, long `realpath()` expansions.
+One hit. Shell with Evil-WinRM. User flag on the desktop. Cool.
 
 ---
 
-## Takeaways
+## Hitting the Wall (hard)
 
-Launch hashcat in background from the moment you find hashes. Don't wait. I found the hashes in the first 30 minutes and cracked them after four hours of dead ends. That's a workflow gap.
+My compromised user is in the **IT** group. No privileges, no admin, nothing actually obvious. Std-checklist:
 
-But the question I'm taking home is: if that password had been strong, what path did I miss?
+- Kerberoastable SPNs → only `krbtgt`, nope
+- Unconstrained delegation → only DC01 itself, default
+- RBCD → empty
+- Shadow Credentials → empty
+- MSSQL → can't authenticate
+- SYSVOL → clean, default GPOs only
+- User descriptions → nothing
+- Managed Service Accounts → none exist
+
+Everything looked locked. First evening ended here. Wednesday, almost weekend.
+
+### Second Evening: The Right Question
+
+Came back the next evening and realized my ACL enumeration was backwards.
+I'd been checking who has permissions *on* high-value targets — Domain Admins, Administrators, DC01.
+That's the naive mindset from my day job leaking through.
+
+Flipped it. Uploaded PowerView:
+
+```powershell
+Find-InterestingDomainAcl -ResolveGUIDs | ? {$_.IdentityReferenceName -match "IT|<myuser>"}
+```
+
+One result: **IT group has CreateChild on an OU.**
+
+On a normal domain, whatever. On Windows Server 2025 — comes up that's BadSuccessor domain. Good. PWND. Not yet.
 
 ---
 
-## Timeline
+## BadSuccessor: The Short Version
 
-| Phase | Time |
-|-------|------|
-| Recon + foothold | ~15 min |
-| Service account enumeration | ~4 hours |
-| Hash crack + pivot | ~30 min |
-| Root | ~3 hours |
+Server 2025 introduced delegated Managed Service Accounts (dMSA).
+You can "migrate" an old service account to a dMSA, and the dMSA inherits the old account's privileges through Kerberos.
+
+The issue: seems likely that KDC doesn't verify that a real migration happened (?)
+It reads an attribute on the dMSA (`msDS-ManagedAccountPrecededByLink`), sees it pointing to the Administrator account, and hands over a TGT with Administrator privileges.
+
+No questions asked.
+
+Anyone with CreateChild on an OU can create a dMSA and point it at whatever account they want. That's the whole attack. Good. PWND?
 
 ---
+
+## Hitting the wall
+
+Theory is super clear. Execution much less. Here's the condensed version of two evenings of trial and error.
+
+**Wrong tool.** Cloned the Akamai BadSuccessor repo expecting an exploit. It's a detection script. Should've read the README :)
+
+**Wrong object type.** Used `New-ADServiceAccount` which creates gMSAs, not dMSAs. Different object class, different attack. Wasted time before checking `ObjectClass` in the output.
+
+**Missing attributes.** ADSI creation failed until I queried the schema and found two mandatory attributes: `msDS-DelegatedMSAState` and `msDS-ManagedPasswordInterval`.
+
+**The one-shot thing.** With CreateChild permissions, you can set any attribute during the initial object creation. After that, modifying sensitive attributes is denied. I found this out the hard way — created the dMSA, then tried to set the predecessor link separately. Access denied. Had to delete and recreate with everything packed into a single `SetInfo()` call.
+
+>Note on Permissions: This happens because CreateChild on an OU allows you to define the initial state of an object (including sensitive attributes like msDS-ManagedAccountPrecededByLink), but it does not grant WriteProperty or GenericAll over the object once it is "born." Unless the ACEs are set to inherit down to the new child object, you lose control the moment the creation is finalized.
+
+**Network issues.** LDAP and Kerberos are filtered from outside the box. Only WinRM is exposed. I knew it, I ignored it. Set up a chisel reverse tunnel to forward ports 88, 389, and 636 through WinRM. Then LDAP signing kicked in and broke plain LDAP. Then the tunnel kept dying. 1 AM debugging spiral.
+
+**What actually worked.** bloodyAD through the chisel tunnel:
+
+```bash
+bloodyAD -d <domain> -u '<user>' -p '<password>' \
+  --host 127.0.0.1 add badSuccessor myDMSA --prepatch
+```
+
+The `--prepatch` flag skips writing new post-patch attributes on the target account (which requires privileges we don't have) and uses only the original `msDS-ManagedAccountPrecededByLink` on the dMSA.
+
+bloodyAD created the dMSA, set the predecessor, got a TGT, and pulled the Administrator's NT hash from the "previous keys" in the TGS response. Pass-the-hash. Root.
+
+---
+
+## Notes to Self
+
+- `Find-InterestingDomainAcl` filtered by my identity — always run this first, not last.
+- Server 2025 + CreateChild on any OU = check BadSuccessor (immediately)
+- gMSA ≠ dMSA. Different object classes, different cmdlets (!!!)
+- CreateChild = one shot jic. Pack everything into the initial `SetInfo()`.
+- Don't ignore notes on port accessibility while looking for tools. Would've saved me the whole tunnel debugging session.
+- bloodyAD with `--prepatch` I think (but I've not enaugh cs) is currently the cleanest way to run BadSuccessor from Linux.
+- When tunneling AD traffic, expect LDAP signing issues.
+
+Ok. Next.
+
+---
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| NetExec | Password spraying |
+| Evil-WinRM | Shell access |
+| PowerView | ACL enumeration |
+| Chisel | Reverse port forwarding |
+| bloodyAD | BadSuccessor exploitation |
 
 ## References
 
-- [GHSA-hgqp-3mmf-7h8f](https://github.com/google/security-research/security/advisories/GHSA-hgqp-3mmf-7h8f)
-
+- [Akamai — BadSuccessor Research](https://www.akamai.com/blog/security-research/abusing-dmsa-for-privilege-escalation-in-active-directory)
+- [SpecterOps — Understanding & Mitigating BadSuccessor](https://specterops.io/blog/2025/05/27/understanding-mitigating-badsuccessor/)
+- [Unit42 — When Good Accounts Go Bad](https://unit42.paloaltonetworks.com/badsuccessor-attack-vector/)
+- [bloodyAD](https://github.com/CravateRouge/bloodyAD)
