@@ -132,7 +132,10 @@ nxc <protocol> <target> -u users.txt -p passwords.txt --no-bruteforce
 ```
 
 **Special case**: NT_STATUS_PASSWORD_MUST_CHANGE on spray → credentials are valid, account is in expired state.
+
+```bash
 Tool: smbpasswd -r <target> -U <user> (rpcclient and netexec don't handle this state)
+```
 
 **Why**: Expressway. The VPN PSK was the SSH password. I didn't try it right away — I spent an hour on the IPsec tunnel first. On Eighteen, the cracked password from the spray gave direct access.
 
