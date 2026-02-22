@@ -131,6 +131,9 @@ nxc <protocol> <target> -u users.txt -p '<password>'
 nxc <protocol> <target> -u users.txt -p passwords.txt --no-bruteforce
 ```
 
+**Special case**: NT_STATUS_PASSWORD_MUST_CHANGE on spray → credentials are valid, account is in expired state.
+Tool: smbpasswd -r <target> -U <user> (rpcclient and netexec don't handle this state)
+
 **Why**: Expressway. The VPN PSK was the SSH password. I didn't try it right away — I spent an hour on the IPsec tunnel first. On Eighteen, the cracked password from the spray gave direct access.
 
 ---
@@ -237,6 +240,7 @@ sudo timedatectl set-time "$(date -d "$(curl -s -I http://<DC_IP> | grep -i '^Da
 | Broken tooling on Windows | Commands failing silently | Verify tools loaded BEFORE enumerating |
 | Forgetting UDP | TCP-only scan | UDP top-100 is always in the first nmap |
 | Password found, not tried everywhere | New credential → only tried where I found it | Spray across ALL protocols |
+| SAM hash on a DC → PtH fails | Got local Admin hash, domain PtH rejected | On DCs, SAM = local accounts only. Domain hashes live in ntds.dit — dump that instead |
 
 ---
 
