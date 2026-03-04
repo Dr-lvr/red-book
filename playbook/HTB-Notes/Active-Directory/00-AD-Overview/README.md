@@ -1,5 +1,4 @@
-# AD Penetration Tester — Red Book
-> HTB CAPE Path | @driva | 2026
+# AD Overview
 
 ---
 
