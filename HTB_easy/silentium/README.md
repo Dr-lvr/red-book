@@ -4,10 +4,6 @@
 
 ---
 
-## Enumeration
-
-Target runs Flowise (port 3000) and Gogs (port 3001) on the host, with Flowise also containerized internally.
-
 ### Password Reset Bypass (CVE-2025-58434)
 
 The `/forgot-password` endpoint leaks the `tempToken` required for password reset without proper validation. By extracting this token from the response, it's possible to reset any user's password:
