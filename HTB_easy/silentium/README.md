@@ -40,7 +40,7 @@ Login with new credentials to obtain API key for authenticated requests.
 ```bash
 curl -X POST http://staging.silentium.htb/api/v1/node-load-method/customMCP \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer hWp_8jB76zi0VtKSr2d9TfGK1fm6NuNPg1uA-8FsUJc" \
+  -H "Authorization: Bearer xXx" \
   -d '{
     "loadMethod": "listActions",
     "inputs": {
