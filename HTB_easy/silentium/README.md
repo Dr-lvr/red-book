@@ -8,9 +8,6 @@
 
 Port 80 hosts silentium.htb, a static site exposing user information including the username ben.
 Subdomain enumeration reveals staging.silentium.htb, which runs Flowise (AI orchestration platform).
-Flowise version check and public CVE research identifies CVE-2025-58434 — an unauthenticated password reset vulnerability in the /forgot-password endpoint.
-The endpoint leaks tempToken without proper validation, allowing arbitrary password reset for any user account.
-Using this vulnerability, the password for ben@silentium.htb is reset to a known value, providing authenticated access and API token generation.
 
 ### Password Reset Bypass (CVE-2025-58434)
 
