@@ -38,21 +38,3 @@ Certifications prove you passed an exam. This proves how I think.
 When I apply for my first offensive security role, I want the interviewer to see the process — not just the result. How I enumerate. How I recognize dead ends. How I adapted when strongSwan didn't support aggressive mode and I had to learn libreswan at midnight. How I went from "Windows is opaque" to rooting a Server 2025 domain controller in three days.
 
 I come from industrial automation. I think in systems — inputs, outputs, feedback loops, failure modes. That's not the typical pentester background, and this repo is where I'm building the bridge between the two.
-
----
-
-## Background
-
-- 5+ years full-stack development (C#/.NET, Python, C++)
-- 5 years OT/industrial automation (PLC, SCADA, Modbus TCP, Profinet, EtherNet/IP)
-- International project delivery across 5 continents
-- Currently pursuing: HTB CPTS → EC-Council ICS/SCADA + C|PENT → OSCP
-- Target: OT/ICS offensive security
-
----
-
-## Status
-
-Active. Updated weekly as I work through boxes and refine methodology.
-
-*Writeups for active HTB machines are kept private and published after retirement.*
