@@ -1,4 +1,4 @@
-# Operational Playbook — Built on My Mistakes
+# Operational Playbook
 
 > This is not a generic playbook. It's extracted from 7 HTB boxes in 9 days and the patterns I kept repeating.
 > Every rule exists because I broke it at least once.
