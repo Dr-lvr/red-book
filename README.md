@@ -28,13 +28,3 @@ red-book/
 **HTB_easy/** — Writeups of HackTheBox machines. Each one tells the real story: what I tried, what failed, what I learned. Spoiler-free while boxes are active, published after retirement. The value isn't in the flags — it's in the methodology.
 
 **playbook/** — My operational playbook, extracted from recurring mistakes. Every rule exists because I broke it at least once. Versioned monthly so I can track how my methodology evolves. The February 2026 edition has 10 rules from 7 boxes. By the time I sit for the CPTS exam, it should have 30.
-
----
-
-## Why this exists
-
-Certifications prove you passed an exam. This proves how I think.
-
-When I apply for my first offensive security role, I want the interviewer to see the process — not just the result. How I enumerate. How I recognize dead ends. How I adapted when strongSwan didn't support aggressive mode and I had to learn libreswan at midnight. How I went from "Windows is opaque" to rooting a Server 2025 domain controller in three days.
-
-I come from industrial automation. I think in systems — inputs, outputs, feedback loops, failure modes. That's not the typical pentester background, and this repo is where I'm building the bridge between the two.
