@@ -1,8 +1,8 @@
 # red-book
 
-I'm a full-stack developer in industrial OT/IT integration — PLCs, SCADA systems, Modbus TCP, factory floors across Pakistan, Brazil, Colombia, Turkey, and Canada. I've spent my career making machines talk to software. Now I'm learning how to break in.
+I'm a full-stack developer in industrial OT/IT integration — PLCs, SCADA systems, Modbus TCP, factory floors across Pakistan, Brazil, Colombia, Turkey, and Canada. Now I'm learning how to break in on order to protect.
 
-This repository is the honest record of that transition. Not a collection of copy-paste walkthroughs. Not a portfolio of clean solutions. It's what actually happened: the wrong turns, the walls I hit, the moments I stared at a terminal for 45 minutes before realizing I'd been looking at the answer the whole time.
+This repository is the honest record of that transition not a portfolio of clean solutions. It's what actually happened: the wrong turns, the walls I hit, the moments I stared at a terminal for 45 minutes before realizing I'd been looking at the answer the whole time.
 
 I only write up what made me think. If a box took an hour and I just executed known steps, it's not here. If it took eight hours and I had to learn something I didn't know existed, it is.
 
