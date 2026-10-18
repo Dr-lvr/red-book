@@ -25,6 +25,6 @@ red-book/
 └── README.md
 ```
 
-**HTB_easy/** — Writeups of HackTheBox machines. Each one tells the real story: what I tried, what failed, what I learned. Spoiler-free while boxes are active, published after retirement. The value isn't in the flags — it's in the methodology.
+**HTB_easy/** — Writeups of HackTheBox machines. Each one tells the real story: what I tried, what failed, what I learned. Spoiler-free while boxes are active, published after retirement.
 
-**playbook/** — My operational playbook, extracted from recurring mistakes. Every rule exists because I broke it at least once. Versioned monthly so I can track how my methodology evolves. The February 2026 edition has 10 rules from 7 boxes. By the time I sit for the CPTS exam, it should have 30.
+**playbook/** — My operational playbook, extracted from recurring mistakes. Every rule exists because I broke it at least once. Versioned so I can track how my methodology evolves.
